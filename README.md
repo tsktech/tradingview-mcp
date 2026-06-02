@@ -95,10 +95,64 @@ TradingView Desktop must be running with Chrome DevTools Protocol enabled on por
 ./scripts/launch_tv_debug_mac.sh
 ```
 
-**Windows:**
+**Windows (traditional install):**
 ```bash
 scripts\launch_tv_debug.bat
 ```
+
+**Windows (Microsoft Store install — one-time automated setup):**
+
+Paste this into PowerShell — it clones the repo, installs dependencies, and wires up your MCP config automatically:
+
+```powershell
+# Step 1 — Clone or update the repo
+$repoPath = "$env:USERPROFILE\tradingview-mcp"
+if (Test-Path $repoPath) {
+    Write-Host "Repo exists — pulling latest..." -ForegroundColor Cyan
+    Set-Location $repoPath; git pull
+} else {
+    Write-Host "Cloning repo..." -ForegroundColor Cyan
+    git clone https://github.com/tsktech/tradingview-mcp.git $repoPath
+}
+
+# Install dependencies
+Write-Host "Installing npm packages..." -ForegroundColor Cyan
+Set-Location $repoPath; npm install
+
+# Step 2 — Create/merge ~/.claude/.mcp.json
+$claudeDir = "$env:USERPROFILE\.claude"
+$mcpFile   = "$claudeDir\.mcp.json"
+New-Item -ItemType Directory -Force -Path $claudeDir | Out-Null
+
+$serverPath = ($repoPath + "\src\server.js") -replace '\\', '/'
+
+$tvEntry = [PSCustomObject]@{
+    command = "node"
+    args    = @($serverPath)
+}
+
+if (Test-Path $mcpFile) {
+    Write-Host "Merging into existing .mcp.json..." -ForegroundColor Cyan
+    $existing = Get-Content $mcpFile -Raw | ConvertFrom-Json
+    $existing.mcpServers | Add-Member -NotePropertyName "tradingview" -NotePropertyValue $tvEntry -Force
+    $existing | ConvertTo-Json -Depth 10 | Set-Content $mcpFile -Encoding UTF8
+} else {
+    Write-Host "Creating new .mcp.json..." -ForegroundColor Cyan
+    [PSCustomObject]@{
+        mcpServers = [PSCustomObject]@{ tradingview = $tvEntry }
+    } | ConvertTo-Json -Depth 10 | Set-Content $mcpFile -Encoding UTF8
+}
+
+Write-Host ""
+Write-Host "All done! Config saved to: $mcpFile" -ForegroundColor Green
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Yellow
+Write-Host "  1. Open Claude Code (restart it if already open)"
+Write-Host "  2. Type: tv_launch        <- auto-detects your Windows Store TradingView and launches it with the debug port"
+Write-Host "  3. Type: tv_health_check  <- should return cdp_connected: true"
+```
+
+> **Note:** This fork auto-detects TradingView installed from the Microsoft Store — no manual path configuration needed.
 
 **Linux:**
 ```bash
